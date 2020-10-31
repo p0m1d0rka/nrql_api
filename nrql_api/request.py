@@ -1,9 +1,10 @@
 import uuid
 import logging
-from nrql_api.response import Response
+from nrql_api.response import NrqlApiResponse
+import time
 
 
-class Request:
+class NrqlApiRequest:
     logger = logging.getLogger(__name__)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     console = logging.StreamHandler()
@@ -29,11 +30,11 @@ class Request:
 
         """
         if is_debug:
-            Request.logger.setLevel(logging.DEBUG)
-        Request.account = account
-        Request.api_key = api_key
-        Request.api_url = api_url
-        Request.session = session
+            NrqlApiRequest.logger.setLevel(logging.DEBUG)
+        NrqlApiRequest.account = account
+        NrqlApiRequest.api_key = api_key
+        NrqlApiRequest.api_url = api_url
+        NrqlApiRequest.session = session
         return True
 
     def __init__(self, nrql_query):
@@ -77,7 +78,7 @@ class Request:
         }
         '''
         variables = {
-            "account": Request.account,
+            "account": NrqlApiRequest.account,
             "query_string": self.nrql_query
         }
         return {"query": query, "variables": variables}
@@ -85,23 +86,21 @@ class Request:
     async def run_async(self):
         headers = {
             "Content-Type": "application/json",
-            "API-Key": Request.api_key
+            "API-Key": NrqlApiRequest.api_key
         }
-        Request.logger.info(f"{self.uuid} - Making request. with query string {self.nrql_query}..")
-        async with Request.session.post(Request.api_url, headers=headers, json=self.to_graphql_format) as response:
-            Request.logger.info(f"{self.uuid} - Get response with status={response.status}")
-            return await response.json()
-            # self.logger.debug(f" Finished  with code={response.status}")
-            # if response.status == 200:
-            #     try:
-            #         results_json = await response.json()
-            #         results = results_json["data"]["actor"]["account"]["nrql"]["results"]
-            #         self.logger.debug(results)
-            #         return results
-            #     except Exception as e:
-            #         self.logger.exception(f"Error while reading content: {e}")
-            #         return None, None
-            # else:
-            #     text = await response.text()
-            #     self.logger.error(f"status={response.status} text={text}")
-            #     return None, None
+        NrqlApiRequest.logger.info(f"{self.uuid} - Making request. with query string {self.nrql_query}..")
+        start_time = time.time()
+        async with NrqlApiRequest.session.post(NrqlApiRequest.api_url, headers=headers, json=self.to_graphql_format) as response:
+            exec_time = time.time() - start_time
+            NrqlApiRequest.logger.info(f"{self.uuid} - Get response with status={response.status} exec_time={exec_time}")
+            json_body = await response.json()
+            return NrqlApiResponse(
+                status=response,
+                json_body=json_body,
+                method=response.method,
+                headers=response.headers,
+                content_type=response.headers,
+                is_ok=response.ok,
+                exec_time=exec_time
+            )
+
