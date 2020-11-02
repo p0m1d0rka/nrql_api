@@ -141,7 +141,8 @@ class NrqlApiResponse:
             elif "timestamp" in self.results[0]:
                 headers = set()
                 for row in self.results:
-                    headers.add(tuple(row.keys()))
+                    for key in row.keys():
+                        headers.add(key)
                 headers = tuple(headers)
 
 
