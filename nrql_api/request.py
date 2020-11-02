@@ -6,10 +6,6 @@ import time
 
 class NrqlApiRequest:
     logger = logging.getLogger(__name__)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    console = logging.StreamHandler()
-    console.setFormatter(formatter)
-    logger.addHandler(console)
     logger.setLevel(logging.INFO)
     account = None
     api_key = None
