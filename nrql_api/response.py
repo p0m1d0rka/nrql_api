@@ -9,9 +9,6 @@ class NrqlApiResponse:
     """
     logger = logging.getLogger(__name__)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    console = logging.StreamHandler()
-    console.setFormatter(formatter)
-    logger.addHandler(console)
     logger.setLevel(logging.INFO)
 
     def __init__(self, status, json_body, headers, method, content_type, exec_time, is_ok, is_debug=False):
