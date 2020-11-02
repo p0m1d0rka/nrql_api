@@ -139,7 +139,12 @@ class NrqlApiResponse:
                     result_list.append(tuple(row.values()))
                 return headers, result_list
             elif "timestamp" in self.results[0]:
-                headers = tuple(self.results[0])
+                headers = set()
+                for row in self.results:
+                    headers.add(tuple(row.keys()))
+                headers = tuple(headers)
+
+
                 result_list = []
                 for row in self.results:
                     # clickhouse needs this format 2012-03-16 03:53:12

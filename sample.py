@@ -23,7 +23,7 @@ async def main():
         responses = await asyncio.gather(re3)
         for resp in responses:
             headers, data = resp.to_flat_format()
-        # print(responses)
+        print(responses)
         print("done")
 
 asyncio.run(main())
