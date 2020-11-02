@@ -13,7 +13,7 @@ async def main():
         NrqlApiRequest.configure(account=account, api_key=api_key, session=session, is_debug=True)
         nrql_query = "SELECT count(*) FROM  PageView WITH TIMEZONE 'Europe/Moscow' FACET deviceType,appName  SINCE '2020-10-29 09:10:00' until '2020-10-29 09:12:00' limit max "
         nrql_query2 = "SELECT count(*) FROM  PageView WITH TIMEZONE 'Europe/Moscow' FACET deviceType, appName SINCE '2020-10-29 09:11:00' until '2020-10-29 09:13:00' limit max TIMESERIES 1 minute  "
-        nrql_query3 = "SELECT duration, session FROM  PageView WITH TIMEZONE 'Europe/Moscow' SINCE '2020-10-29 09:10:00' until '2020-10-29 09:11:00' limit 5  "
+        nrql_query3 = "SELECT   * FROM PageView   WITH TIMEZONE 'Europe/Moscow' WHERE city!='Moscow' SINCE '2020-10-29 11:19:00' until '2020-10-29 11:20:00' limit max "
         r = NrqlApiRequest(nrql_query=nrql_query)
         r2 = NrqlApiRequest(nrql_query=nrql_query2)
         r3 = NrqlApiRequest(nrql_query=nrql_query3)

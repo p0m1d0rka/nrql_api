@@ -144,7 +144,10 @@ class NrqlApiResponse:
                 for row in self.results:
                     # clickhouse needs this format 2012-03-16 03:53:12
                     row["timestamp"] = dt.datetime.fromtimestamp(row["timestamp"] / 1000).strftime("%Y-%m-%d %H:%M:%S")
-                    result_list.append(tuple(row.values()))
+                    res = [row[h] for h in headers]
+
+                    result_list.append(tuple(res))
+
                 return headers, result_list
             else:
                 """
