@@ -78,13 +78,18 @@ class NrqlApiResponse:
 
     @property
     def is_facet_query(self) -> bool:
-        return not (self.metadata["facets"] is None)
+        if self.is_error:
+            return False
+        else:
+            return not (self.metadata["facets"] is None)
 
     def to_flat_format(self) -> tuple:
         """
         Returns (headers,  list of tuples of data)
 
         """
+        if self.is_error:
+            return ("error",), (self.error_message,)
         if self.is_facet_query:
             if "beginTimeSeconds" in self.results[0]:
                 """
