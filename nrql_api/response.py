@@ -65,6 +65,10 @@ class NrqlApiResponse:
     def results(self) -> dict:
         return self.json_body["data"]["actor"]["account"]["nrql"]["results"]
 
+    @results.setter
+    def results(self, new_results):
+        self.json_body["data"]["actor"]["account"]["nrql"]["results"] = new_results
+
     @property
     def metadata(self) -> dict:
         """
@@ -151,7 +155,7 @@ class NrqlApiResponse:
                 result_list = []
                 for row in self.results:
                     # clickhouse needs this format 2012-03-16 03:53:12
-                    row["timestamp"] = dt.datetime.fromtimestamp(row["timestamp"] / 1000).strftime("%Y-%m-%d %H:%M:%S")
+                    row["timestamp"] = round(row["timestamp"] / 1000,0)
                     res = [row.get(h) for h in headers]
 
                     result_list.append(tuple(res))
