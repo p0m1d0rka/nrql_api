@@ -65,6 +65,10 @@ class NrqlApiResponse:
     def results(self) -> dict:
         return self.json_body["data"]["actor"]["account"]["nrql"]["results"]
 
+    @property
+    def is_empty_result(self) -> bool:
+        return len(self.results) == 0
+
     @results.setter
     def results(self, new_results):
         self.json_body["data"]["actor"]["account"]["nrql"]["results"] = new_results
@@ -94,81 +98,22 @@ class NrqlApiResponse:
         """
         if self.is_error:
             return ("error",), (self.error_message,)
-        if self.is_facet_query:
-            if "beginTimeSeconds" in self.results[0]:
-                """
-                This is facet query with timeseries, time in second in the each row ["beginTimeSeconds"]
-                also we have to get headers from metadata[facets]
-                and unpack facet values in each row
-                
-                """
-                headers = [key for key in self.results[0] if type(self.results[0][key]) != list]
-                headers = tuple(headers + self.metadata["facets"] + ["timestamp"])
-                result_list = []
-                for row in self.results:
-                    # clickhouse needs this format 2012-03-16 03:53:12
-                    facet = row["facet"]
-                    timestamp = dt.datetime.fromtimestamp(row["beginTimeSeconds"]).strftime("%Y-%m-%d %H:%M:%S")
-                    vals = [vv for vv in row.values() if type(vv) != list]
-                    vals = vals + facet + [timestamp]
-                    result_list.append(tuple(vals))
-                return headers, result_list
-            else:
-                """
-                This is facet query without timeseries, time in second in the metadata in format 
-                'timeWindow': {'since': "'2020-10-29 09:10:00'", 'until': "'2020-10-29 09:12:00'"}
-                also we have to get headers from metadata[facets]
-                and unpack facet values in each row
-                """
-                headers = [key for key in self.results[0] if type(self.results[0][key]) != list]
-                headers = tuple(headers + self.metadata["facets"] + ["timestamp"])
-                result_list = []
-                for row in self.results:
-                    # clickhouse needs this format 2012-03-16 03:53:12
-                    facet = row["facet"]
-                    timestamp = self.metadata["timeWindow"]["since"].replace("'", "")
-                    vals = [vv for vv in row.values() if type(vv) != list]
-                    vals = vals + facet + [timestamp,]
-                    result_list.append(tuple(vals))
-                return headers, result_list
+        elif self.is_empty_result:
+            return (), []
         else:
-            """
-            Query without facet
-            time can be in timestamp, bigintimeseconds or in metadata
-            """
-            if "beginTimeSeconds" in self.results[0]:
-                headers = tuple(self.results[0]) + ("timestamp",)
-                result_list = []
-                for row in self.results:
-                    # clickhouse needs this format 2012-03-16 03:53:12
-                    row["timestamp"] = dt.datetime.fromtimestamp(row["beginTimeSeconds"]).strftime("%Y-%m-%d %H:%M:%S")
-                    result_list.append(tuple(row.values()))
-                return headers, result_list
-            elif "timestamp" in self.results[0]:
-                headers = set()
-                for row in self.results:
-                    for key in row.keys():
-                        headers.add(key)
-                headers = tuple(headers)
+            headers = set()
+            for row in self.results:
+                for key in row.keys():
+                    headers.add(key)
+            headers = tuple(headers)
 
+            result_list = []
+            for row in self.results:
+                # clickhouse needs this format 2012-03-16 03:53:12
+                row["timestamp"] = round(row["timestamp"] / 1000,0)
+                res = [row.get(h) for h in headers]
 
-                result_list = []
-                for row in self.results:
-                    # clickhouse needs this format 2012-03-16 03:53:12
-                    row["timestamp"] = round(row["timestamp"] / 1000,0)
-                    res = [row.get(h) for h in headers]
+                result_list.append(tuple(res))
 
-                    result_list.append(tuple(res))
+            return headers, result_list
 
-                return headers, result_list
-            else:
-                """
-                Get time from metadata
-                """
-                headers = tuple(self.results[0]) + ("timestamp",)
-                result_list = []
-                for row in self.results:
-                    # clickhouse needs this format 2012-03-16 03:53:12
-                    row["timestamp"] = self.metadata["timeWindow"]["since"].replace("'", "")
-                    result_list.append(tuple(row.values()))
-                return headers, result_list
