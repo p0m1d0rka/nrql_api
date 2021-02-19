@@ -11,7 +11,7 @@ class NrqlApiResponse:
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     logger.setLevel(logging.INFO)
 
-    def __init__(self, status, json_body, headers, method, content_type, exec_time, is_ok, is_debug=False):
+    def __init__(self, status, json_body, headers, method, content_type, exec_time, is_ok, is_debug=False, query_type='raw'):
         self.status = status
         self.json_body = json_body
         self.headers = headers
@@ -19,6 +19,7 @@ class NrqlApiResponse:
         self.content_type = content_type
         self.exec_time = exec_time
         self.is_ok = is_ok
+        self.query_type = query_type
         if is_debug:
             NrqlApiResponse.logger.setLevel(logging.DEBUG)
 
@@ -91,6 +92,31 @@ class NrqlApiResponse:
         else:
             return not (self.metadata["facets"] is None)
 
+    def _raw_query_to_flat_format(self) -> tuple:
+        headers = set()
+        for row in self.results:
+            for key in row.keys():
+                headers.add(key)
+        headers = tuple(headers)
+
+        result_list = []
+        for row in self.results:
+            # clickhouse needs this format 2012-03-16 03:53:12
+            row["timestamp"] = round(row["timestamp"] / 1000, 0)
+            res = [row.get(h) for h in headers]
+
+            result_list.append(tuple(res))
+
+        return headers, result_list
+
+    def _metric_query_to_flat_format(self) -> tuple:
+        # sample data in self.results = {'beginTimeSeconds': 1613553420, 'endTimeSeconds': 1613553480, 'facet': ['hybris1p.komus.net', 'GC/ParNew'], 'hostmetricTimesliceName': ['hybris1p.komus.net', 'GC/ParNew'], 'average.newrelic.timeslice.value': 0.20255556040339998}
+        headers = ('timestamp', 'host', 'metric_name', 'metric_value')
+        result_list = []
+        for row in self.results:
+            result_list.append(tuple([row['beginTimeSeconds'], row['facet'][0],row['facet'][1],row['metric_value']]))
+        return headers, result_list
+
     def to_flat_format(self) -> tuple:
         """
         Returns (headers,  list of tuples of data)
@@ -100,20 +126,10 @@ class NrqlApiResponse:
             return ("error",), (self.error_message,)
         elif self.is_empty_result:
             return (), []
-        else:
-            headers = set()
-            for row in self.results:
-                for key in row.keys():
-                    headers.add(key)
-            headers = tuple(headers)
+        elif self.query_type == 'raw':
+            return self._raw_query_to_flat_format()
+        elif self.query_type == 'metric':
+            return self._metric_query_to_flat_format()
 
-            result_list = []
-            for row in self.results:
-                # clickhouse needs this format 2012-03-16 03:53:12
-                row["timestamp"] = round(row["timestamp"] / 1000,0)
-                res = [row.get(h) for h in headers]
 
-                result_list.append(tuple(res))
-
-            return headers, result_list
 

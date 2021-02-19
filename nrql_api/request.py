@@ -33,7 +33,7 @@ class NrqlApiRequest:
         NrqlApiRequest.session = session
         return True
 
-    def __init__(self, nrql_query):
+    def __init__(self, nrql_query, query_type='raw'):
         """
         Request object implements async request to nrql api.
         Args:
@@ -44,6 +44,7 @@ class NrqlApiRequest:
         """
         self.nrql_query = nrql_query
         self.uuid = uuid.uuid4()
+        self.query_type=query_type
 
     @property
     def to_graphql_format(self):
@@ -97,6 +98,7 @@ class NrqlApiRequest:
                 headers=response.headers,
                 content_type=response.headers,
                 is_ok=response.ok,
-                exec_time=exec_time
+                exec_time=exec_time,
+                query_type=self.query_type
             )
 
