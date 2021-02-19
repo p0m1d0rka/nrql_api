@@ -11,7 +11,7 @@ class NrqlApiResponse:
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     logger.setLevel(logging.INFO)
 
-    def __init__(self, status, json_body, headers, method, content_type, exec_time, is_ok, is_debug=False):
+    def __init__(self, status, json_body, headers, method, content_type, exec_time, is_ok, is_debug=False, query_type='raw'):
         self.status = status
         self.json_body = json_body
         self.headers = headers
@@ -19,6 +19,7 @@ class NrqlApiResponse:
         self.content_type = content_type
         self.exec_time = exec_time
         self.is_ok = is_ok
+        self.query_type = query_type
         if is_debug:
             NrqlApiResponse.logger.setLevel(logging.DEBUG)
 
@@ -65,6 +66,10 @@ class NrqlApiResponse:
     def results(self) -> dict:
         return self.json_body["data"]["actor"]["account"]["nrql"]["results"]
 
+    @property
+    def is_empty_result(self) -> bool:
+        return len(self.results) == 0
+
     @results.setter
     def results(self, new_results):
         self.json_body["data"]["actor"]["account"]["nrql"]["results"] = new_results
@@ -87,6 +92,31 @@ class NrqlApiResponse:
         else:
             return not (self.metadata["facets"] is None)
 
+    def _raw_query_to_flat_format(self) -> tuple:
+        headers = set()
+        for row in self.results:
+            for key in row.keys():
+                headers.add(key)
+        headers = tuple(headers)
+
+        result_list = []
+        for row in self.results:
+            # clickhouse needs this format 2012-03-16 03:53:12
+            row["timestamp"] = round(row["timestamp"] / 1000, 0)
+            res = [row.get(h) for h in headers]
+
+            result_list.append(tuple(res))
+
+        return headers, result_list
+
+    def _metric_query_to_flat_format(self) -> tuple:
+        # sample data in self.results = {'beginTimeSeconds': 1613553420, 'endTimeSeconds': 1613553480, 'facet': ['hybris1p.komus.net', 'GC/ParNew'], 'hostmetricTimesliceName': ['hybris1p.komus.net', 'GC/ParNew'], 'average.newrelic.timeslice.value': 0.20255556040339998}
+        headers = ('timestamp', 'host', 'metric_name', 'metric_value')
+        result_list = []
+        for row in self.results:
+            result_list.append(tuple([row['beginTimeSeconds'], row['facet'][0],row['facet'][1],row['metric_value']]))
+        return headers, result_list
+
     def to_flat_format(self) -> tuple:
         """
         Returns (headers,  list of tuples of data)
@@ -94,81 +124,12 @@ class NrqlApiResponse:
         """
         if self.is_error:
             return ("error",), (self.error_message,)
-        if self.is_facet_query:
-            if "beginTimeSeconds" in self.results[0]:
-                """
-                This is facet query with timeseries, time in second in the each row ["beginTimeSeconds"]
-                also we have to get headers from metadata[facets]
-                and unpack facet values in each row
-                
-                """
-                headers = [key for key in self.results[0] if type(self.results[0][key]) != list]
-                headers = tuple(headers + self.metadata["facets"] + ["timestamp"])
-                result_list = []
-                for row in self.results:
-                    # clickhouse needs this format 2012-03-16 03:53:12
-                    facet = row["facet"]
-                    timestamp = dt.datetime.fromtimestamp(row["beginTimeSeconds"]).strftime("%Y-%m-%d %H:%M:%S")
-                    vals = [vv for vv in row.values() if type(vv) != list]
-                    vals = vals + facet + [timestamp]
-                    result_list.append(tuple(vals))
-                return headers, result_list
-            else:
-                """
-                This is facet query without timeseries, time in second in the metadata in format 
-                'timeWindow': {'since': "'2020-10-29 09:10:00'", 'until': "'2020-10-29 09:12:00'"}
-                also we have to get headers from metadata[facets]
-                and unpack facet values in each row
-                """
-                headers = [key for key in self.results[0] if type(self.results[0][key]) != list]
-                headers = tuple(headers + self.metadata["facets"] + ["timestamp"])
-                result_list = []
-                for row in self.results:
-                    # clickhouse needs this format 2012-03-16 03:53:12
-                    facet = row["facet"]
-                    timestamp = self.metadata["timeWindow"]["since"].replace("'", "")
-                    vals = [vv for vv in row.values() if type(vv) != list]
-                    vals = vals + facet + [timestamp,]
-                    result_list.append(tuple(vals))
-                return headers, result_list
-        else:
-            """
-            Query without facet
-            time can be in timestamp, bigintimeseconds or in metadata
-            """
-            if "beginTimeSeconds" in self.results[0]:
-                headers = tuple(self.results[0]) + ("timestamp",)
-                result_list = []
-                for row in self.results:
-                    # clickhouse needs this format 2012-03-16 03:53:12
-                    row["timestamp"] = dt.datetime.fromtimestamp(row["beginTimeSeconds"]).strftime("%Y-%m-%d %H:%M:%S")
-                    result_list.append(tuple(row.values()))
-                return headers, result_list
-            elif "timestamp" in self.results[0]:
-                headers = set()
-                for row in self.results:
-                    for key in row.keys():
-                        headers.add(key)
-                headers = tuple(headers)
+        elif self.is_empty_result:
+            return (), []
+        elif self.query_type == 'raw':
+            return self._raw_query_to_flat_format()
+        elif self.query_type == 'metric':
+            return self._metric_query_to_flat_format()
 
 
-                result_list = []
-                for row in self.results:
-                    # clickhouse needs this format 2012-03-16 03:53:12
-                    row["timestamp"] = round(row["timestamp"] / 1000,0)
-                    res = [row.get(h) for h in headers]
 
-                    result_list.append(tuple(res))
-
-                return headers, result_list
-            else:
-                """
-                Get time from metadata
-                """
-                headers = tuple(self.results[0]) + ("timestamp",)
-                result_list = []
-                for row in self.results:
-                    # clickhouse needs this format 2012-03-16 03:53:12
-                    row["timestamp"] = self.metadata["timeWindow"]["since"].replace("'", "")
-                    result_list.append(tuple(row.values()))
-                return headers, result_list
