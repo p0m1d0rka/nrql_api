@@ -53,7 +53,7 @@ class NrqlApiRequest:
 
         """
         query = '''
-        query($account: Int!, $query_string: String!)
+        query($account: Int!, $query_string: Nrql!)
         {
             actor {
                 account(id: $account) {
